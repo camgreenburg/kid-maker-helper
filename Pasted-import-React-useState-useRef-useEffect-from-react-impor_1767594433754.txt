@@ -1,0 +1,475 @@
+import React, { useState, useRef, useEffect } from ‘react’;
+import { Camera, Send, ArrowLeft, Play, RefreshCw, X, Loader2 } from ‘lucide-react’;
+
+// ============================================
+// TYPES (lib/types/index.ts)
+// ============================================
+
+const ResponseType = {
+CLARIFY: ‘clarify’,
+VIDEO: ‘video’,
+TEXT: ‘text’
+};
+
+// ============================================
+// MOCK API RESPONSES (for demo)
+// ============================================
+
+const mockResponses = [
+{
+type: ‘clarify’,
+say: ‘Goal: Build something with cardboard’,
+question: ‘What do you want to make?’,
+choices: [‘A robot’, ‘A house’, ‘A car’]
+},
+{
+type: ‘video’,
+say: ‘Goal: Make a cardboard robot’,
+video: {
+videoId: ‘dQw4w9WgXcQ’,
+startSeconds: 45,
+title: ‘How to Make a Cardboard Robot - Easy DIY’,
+why: ‘Shows step-by-step robot construction’
+},
+alternates: [
+{ videoId: ‘J—aiyznGQ’, startSeconds: 0, title: ‘Simple Robot from Boxes’ }
+]
+}
+];
+
+// ============================================
+// COMPONENTS
+// ============================================
+
+// Video Card Component
+function VideoCard({ video, onOpen, compact = false }) {
+return (
+<div className={`bg-gray-100 rounded-lg overflow-hidden ${compact ? 'max-w-sm' : 'w-full'}`}>
+<div className="relative bg-gray-900 aspect-video flex items-center justify-center">
+<img
+src={`https://img.youtube.com/vi/${video.videoId}/mqdefault.jpg`}
+alt={video.title}
+className=“w-full h-full object-cover”
+/>
+<div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+<Play className="w-12 h-12 text-white opacity-80" />
+</div>
+</div>
+<div className="p-3">
+<h3 className="font-medium text-gray-900 text-sm line-clamp-2 mb-2">{video.title}</h3>
+{video.why && (
+<p className="text-xs text-gray-500 mb-2">{video.why}</p>
+)}
+<button
+onClick={() => onOpen(video)}
+className=“w-full bg-blue-600 text-white text-sm py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors”
+>
+Open video
+</button>
+</div>
+</div>
+);
+}
+
+// Video Player Component
+function VideoPlayer({ video }) {
+const startTime = video.startSeconds || 0;
+return (
+<div className="w-full aspect-video bg-black rounded-lg overflow-hidden">
+<iframe
+width=“100%”
+height=“100%”
+src={`https://www.youtube.com/embed/${video.videoId}?start=${startTime}&rel=0`}
+title={video.title}
+frameBorder=“0”
+allow=“accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture”
+allowFullScreen
+/>
+</div>
+);
+}
+
+// Chat Message Component
+function ChatMessage({ message, onOpenVideo }) {
+const isUser = message.role === ‘user’;
+
+return (
+<div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
+<div className={`max-w-[85%] ${isUser ? 'order-1' : ''}`}>
+{/* User message with optional image */}
+{isUser && (
+<div className="bg-blue-600 text-white rounded-2xl rounded-br-md px-4 py-2">
+{message.image && (
+<img 
+src={message.image} 
+alt="Uploaded" 
+className="max-w-48 rounded-lg mb-2"
+/>
+)}
+<p className="text-sm">{message.text}</p>
+</div>
+)}
+
+```
+    {/* Assistant message */}
+    {!isUser && (
+      <div className="space-y-3">
+        {/* Say text */}
+        {message.say && (
+          <div className="bg-gray-100 rounded-2xl rounded-bl-md px-4 py-2">
+            <p className="text-sm text-gray-800">{message.say}</p>
+          </div>
+        )}
+        
+        {/* Clarifying question with choices */}
+        {message.type === ResponseType.CLARIFY && (
+          <div className="space-y-2">
+            <p className="text-sm text-gray-700 px-1">{message.question}</p>
+            <div className="flex flex-wrap gap-2">
+              {message.choices?.map((choice, i) => (
+                <button
+                  key={i}
+                  onClick={() => message.onChoiceSelect?.(choice)}
+                  className="bg-white border border-gray-300 text-gray-700 text-sm px-3 py-1.5 rounded-full hover:bg-gray-50 transition-colors"
+                >
+                  {choice}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Video card */}
+        {message.type === ResponseType.VIDEO && message.video && (
+          <VideoCard 
+            video={message.video} 
+            onOpen={onOpenVideo}
+            compact
+          />
+        )}
+        
+        {/* Plain text response */}
+        {message.type === ResponseType.TEXT && !message.say && (
+          <div className="bg-gray-100 rounded-2xl rounded-bl-md px-4 py-2">
+            <p className="text-sm text-gray-800">{message.text}</p>
+          </div>
+        )}
+      </div>
+    )}
+  </div>
+</div>
+```
+
+);
+}
+
+// Input Dock Component
+function InputDock({ onSend, disabled }) {
+const [text, setText] = useState(’’);
+const [image, setImage] = useState(null);
+const fileInputRef = useRef(null);
+
+const handleImageSelect = (e) => {
+const file = e.target.files?.[0];
+if (file) {
+const reader = new FileReader();
+reader.onload = (e) => setImage(e.target.result);
+reader.readAsDataURL(file);
+}
+};
+
+const handleSend = () => {
+if (text.trim() || image) {
+onSend({ text: text.trim(), image });
+setText(’’);
+setImage(null);
+}
+};
+
+const handleKeyDown = (e) => {
+if (e.key === ‘Enter’ && !e.shiftKey) {
+e.preventDefault();
+handleSend();
+}
+};
+
+return (
+<div className="bg-white border-t border-gray-200 p-3">
+{/* Image preview */}
+{image && (
+<div className="relative inline-block mb-2">
+<img src={image} alt="Preview" className="h-16 rounded-lg" />
+<button
+onClick={() => setImage(null)}
+className=“absolute -top-2 -right-2 bg-gray-800 text-white rounded-full p-1”
+>
+<X className="w-3 h-3" />
+</button>
+</div>
+)}
+
+```
+  <div className="flex items-end gap-2">
+    {/* Camera/Upload button */}
+    <button
+      onClick={() => fileInputRef.current?.click()}
+      className="flex-shrink-0 p-2.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+      disabled={disabled}
+    >
+      <Camera className="w-5 h-5" />
+    </button>
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept="image/*"
+      capture="environment"
+      onChange={handleImageSelect}
+      className="hidden"
+    />
+    
+    {/* Text input */}
+    <div className="flex-1 relative">
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Describe what you're making..."
+        disabled={disabled}
+        rows={1}
+        className="w-full resize-none border border-gray-300 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
+        style={{ minHeight: '42px', maxHeight: '120px' }}
+      />
+    </div>
+    
+    {/* Send button */}
+    <button
+      onClick={handleSend}
+      disabled={disabled || (!text.trim() && !image)}
+      className="flex-shrink-0 p-2.5 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {disabled ? (
+        <Loader2 className="w-5 h-5 animate-spin" />
+      ) : (
+        <Send className="w-5 h-5" />
+      )}
+    </button>
+  </div>
+</div>
+```
+
+);
+}
+
+// Full Chat View
+function FullChatView({ messages, onSend, onOpenVideo, isLoading }) {
+const messagesEndRef = useRef(null);
+
+useEffect(() => {
+messagesEndRef.current?.scrollIntoView({ behavior: ‘smooth’ });
+}, [messages]);
+
+return (
+<div className="flex flex-col h-full">
+{/* Chat messages */}
+<div className="flex-1 overflow-y-auto p-4">
+{messages.length === 0 && (
+<div className="h-full flex flex-col items-center justify-center text-gray-400">
+<Camera className="w-12 h-12 mb-3 opacity-50" />
+<p className="text-sm">Take a photo or describe what you’re making</p>
+</div>
+)}
+{messages.map((msg, i) => (
+<ChatMessage 
+key={i} 
+message={msg} 
+onOpenVideo={onOpenVideo}
+/>
+))}
+<div ref={messagesEndRef} />
+</div>
+
+```
+  {/* Input dock */}
+  <InputDock onSend={onSend} disabled={isLoading} />
+</div>
+```
+
+);
+}
+
+// Video Focus View
+function VideoFocusView({ video, messages, alternates, onSend, onBack, onShowAnother, isLoading }) {
+const messagesEndRef = useRef(null);
+
+useEffect(() => {
+messagesEndRef.current?.scrollIntoView({ behavior: ‘smooth’ });
+}, [messages]);
+
+return (
+<div className="flex h-full">
+{/* Left: Video player */}
+<div className="flex-1 flex flex-col bg-gray-900 p-4">
+<div className="flex items-center gap-3 mb-4">
+<button
+onClick={onBack}
+className="text-white hover:text-gray-300 transition-colors"
+>
+<ArrowLeft className="w-5 h-5" />
+</button>
+<span className="text-white text-sm">Back to chat</span>
+</div>
+
+```
+    <div className="flex-1 flex flex-col">
+      <VideoPlayer video={video} />
+      <div className="mt-4">
+        <h2 className="text-white font-medium">{video.title}</h2>
+        {video.startSeconds > 0 && (
+          <p className="text-gray-400 text-sm mt-1">
+            Starting at {Math.floor(video.startSeconds / 60)}:{String(video.startSeconds % 60).padStart(2, '0')}
+          </p>
+        )}
+        {alternates?.length > 0 && (
+          <button
+            onClick={onShowAnother}
+            className="mt-3 flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Show another video
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+  
+  {/* Right: Chat sidebar */}
+  <div className="w-80 flex flex-col bg-white border-l border-gray-200">
+    <div className="flex-1 overflow-y-auto p-3">
+      {messages.map((msg, i) => (
+        <ChatMessage 
+          key={i} 
+          message={msg}
+          onOpenVideo={() => {}}
+        />
+      ))}
+      <div ref={messagesEndRef} />
+    </div>
+    <InputDock onSend={onSend} disabled={isLoading} />
+  </div>
+</div>
+```
+
+);
+}
+
+// ============================================
+// MAIN APP
+// ============================================
+
+export default function KidMakerHelper() {
+const [view, setView] = useState(‘chat’); // ‘chat’ | ‘video’
+const [messages, setMessages] = useState([]);
+const [currentVideo, setCurrentVideo] = useState(null);
+const [alternates, setAlternates] = useState([]);
+const [isLoading, setIsLoading] = useState(false);
+const [sessionId] = useState(() => `session_${Date.now()}`);
+
+// Simulate API call
+const callApi = async (text, image) => {
+// In real implementation, this would call POST /api/turn
+await new Promise(r => setTimeout(r, 1500));
+
+```
+// Demo logic: first message gets clarify, subsequent get video
+if (messages.filter(m => m.role === 'user').length === 0) {
+  return mockResponses[0];
+}
+return mockResponses[1];
+```
+
+};
+
+const handleSend = async ({ text, image }) => {
+// Add user message
+const userMessage = { role: ‘user’, text, image };
+setMessages(prev => […prev, userMessage]);
+setIsLoading(true);
+
+```
+try {
+  const response = await callApi(text, image);
+  
+  // Create assistant message with choice handler
+  const assistantMessage = {
+    role: 'assistant',
+    ...response,
+    onChoiceSelect: (choice) => handleSend({ text: choice, image: null })
+  };
+  
+  setMessages(prev => [...prev, assistantMessage]);
+  
+  // Store video info if present
+  if (response.type === ResponseType.VIDEO && response.video) {
+    setCurrentVideo(response.video);
+    setAlternates(response.alternates || []);
+  }
+} catch (error) {
+  setMessages(prev => [...prev, {
+    role: 'assistant',
+    type: ResponseType.TEXT,
+    say: 'Try describing what you want to do in one sentence.'
+  }]);
+} finally {
+  setIsLoading(false);
+}
+```
+
+};
+
+const handleOpenVideo = (video) => {
+setCurrentVideo(video);
+setView(‘video’);
+};
+
+const handleShowAnother = () => {
+if (alternates.length > 0) {
+const [next, …rest] = alternates;
+setAlternates([…rest, currentVideo]);
+setCurrentVideo(next);
+}
+};
+
+return (
+<div className="h-screen bg-white flex flex-col">
+{/* Header */}
+<header className="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
+<h1 className="text-lg font-semibold text-gray-900">Maker Helper</h1>
+</header>
+
+```
+  {/* Main content */}
+  <main className="flex-1 overflow-hidden">
+    {view === 'chat' ? (
+      <FullChatView
+        messages={messages}
+        onSend={handleSend}
+        onOpenVideo={handleOpenVideo}
+        isLoading={isLoading}
+      />
+    ) : (
+      <VideoFocusView
+        video={currentVideo}
+        messages={messages}
+        alternates={alternates}
+        onSend={handleSend}
+        onBack={() => setView('chat')}
+        onShowAnother={handleShowAnother}
+        isLoading={isLoading}
+      />
+    )}
+  </main>
+</div>
+```
+
+);
+}
